@@ -1,0 +1,27 @@
+---
+  - hosts: all
+    gather_facts: true
+    become: true
+    handlers:
+    vars:
+      - githubuser: sefacanacar@gmail.com
+      - githubpass: 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
+    tasks:
+    - name: Clone the Project
+      git:
+        repo: "https://{{ githubuser | urlencode }}:{{ githubpass | urlencode }}@github.com/sefacanacar/basic-python-app-for-docker"
+        dest: /root/basic-python-app-for-docker
+        single_branch: yes
+        version: master
+    
+    - name: "Build Python App Image"
+      shell: "docker image build -t python-app /root/basic-python-app-for-docker/"
+      register: scOut6
+    - debug: var=scOut6.stdout_lines
+
+    - name: Create Local registry
+      shell: "{{ item }}"
+      with_items:
+        - "docker run -d -p 5000:5000 --restart=always --name registry registry:2"
+        - "docker tag python-app:latest 127.0.0.1:5000/local/python-app:latest"
+        - "docker push 127.0.0.1:5000/local/python-app:latest"

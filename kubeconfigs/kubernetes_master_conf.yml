@@ -1,0 +1,58 @@
+---
+  - hosts: all
+    gather_facts: true
+    become: true
+    handlers:
+    tasks:
+    - name: Initialize the Kubernetes cluster using kubeadm
+      command: kubeadm init --apiserver-advertise-address="{{ ansible_default_ipv4.address }}" --apiserver-cert-extra-sans="{{ ansible_default_ipv4.address }}"  --node-name {{ ansible_hostname }} --pod-network-cidr=172.16.0.0/16
+    
+    - name: Setup kubeconfig for vagrant user
+      command: "{{ item }}"
+      with_items:
+        - mkdir -p /home/vagrant/.kube
+        - cp -i /etc/kubernetes/admin.conf /home/vagrant/.kube/config
+        - chown vagrant:vagrant /home/vagrant/.kube/config
+
+    - name: Install calico pod network
+      become: false
+      command: kubectl create -f https://docs.projectcalico.org/manifests/calico.yaml
+
+    - name: Generate join command
+      command: kubeadm token create --print-join-command
+      register: join_command
+
+    - name: copy the output to a local file
+      copy:
+        content: "{{ join_command.stdout }}"
+        dest: "/tmp/join_command"
+        mode: '0777'
+
+    - name: ansible copy file from remote to local.
+      fetch:
+        src: /tmp/join_command
+        dest: /Users/sefa.acar/ansible-vagrant-gitlab/join/
+        flat: yes
+
+    - name: Label Node as worker
+      shell: "kubectl --kubeconfig=/etc/kubernetes/admin.conf label node {{ ansible_hostname }} node-role.kubernetes.io/worker=worker"
+
+    - name: Taint master for pod scheduling
+      shell: "kubectl --kubeconfig=/etc/kubernetes/admin.conf taint nodes --all node-role.kubernetes.io/master-"
+
+    - name: "Copy Python App Files"
+      become: true
+      copy:
+        src: "/Users/sefa.acar/ansible-vagrant-gitlab/kubeconfigs/"
+        dest: "/root"
+        owner: root
+        group: root        
+        mode: 0755
+
+    - name:
+      shell: "{{ item }}"
+      with_items:
+        - "kubectl --kubeconfig=/etc/kubernetes/admin.conf apply -f /root/mysql-pv.yml"
+        - "kubectl --kubeconfig=/etc/kubernetes/admin.conf apply -f /root/mysql.yml"
+        - "kubectl --kubeconfig=/etc/kubernetes/admin.conf apply -f /root/python-app.yml"
+

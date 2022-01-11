@@ -1,0 +1,138 @@
+---
+  - hosts: all
+    gather_facts: true
+    become: true
+    handlers:
+    tasks:
+    - name: Restart sshd
+      service:
+        name: sshd
+        state: restarted
+
+    - name: Create User sefa
+      user:
+        name: sefa
+        state: present
+        password: "{{ 'Aa34Bb35' | password_hash('sha512') }}"
+        update_password: on_create
+        shell: /bin/bash
+
+    - name: Add Sudo Rights For User Sefa
+      copy:
+        dest: /etc/sudoers.d/sefa
+        content: "sefa ALL=(root) NOPASSWD: ALL"
+        backup: true
+      
+    - name: Add Sudo Rights For User Vagrant
+      copy:
+        dest: /etc/sudoers.d/vagrant
+        content: "vagrant ALL=(root) NOPASSWD: ALL"
+        backup: true
+
+    - name: Enable Password Authentication
+      lineinfile: dest=/etc/ssh/sshd_config
+        state=absent
+        regexp='PasswordAuthentication no'
+
+    - name: Restart sshd Service
+      service:
+        name: sshd
+        state: restarted
+
+    - name: Install Preq Packages
+      apt:
+        pkg:
+        - ca-certificates
+        - curl
+        - gnupg
+        - gnupg-agent
+        - lsb-release
+        - apt-transport-https
+        - software-properties-common
+
+    - name: "Download Docker GPG keys"
+      shell: "curl -fsSL https://download.docker.com/linux/ubuntu/gpg | gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg"
+      register: scOut2
+    - debug: var=scOut2.stdout_lines
+
+    - name: "Add Docker Repo"
+      shell: 'echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" | tee /etc/apt/sources.list.d/docker.list > /dev/null'
+      register: scOut3
+    - debug: var=scOut3.stdout_lines
+
+    - name: "Download K8S GPG keys"
+      shell: "curl -fsSLo /usr/share/keyrings/kubernetes-archive-keyring.gpg https://packages.cloud.google.com/apt/doc/apt-key.gpg"
+      register: scOut4
+    - debug: var=scOut4.stdout_lines
+
+    - name: "Add K8S Repo"
+      shell: 'echo "deb [signed-by=/usr/share/keyrings/kubernetes-archive-keyring.gpg] https://apt.kubernetes.io/ kubernetes-xenial main" | sudo tee /etc/apt/sources.list.d/kubernetes.list'
+      register: scOut5
+    - debug: var=scOut5.stdout_lines
+
+    - name: update repo cache
+      apt:
+        update_cache: yes
+
+    - name: Install Docker and k8s
+      apt:
+        pkg:
+        - docker-ce
+        - docker-ce-cli
+        - containerd.io
+        - kubelet
+        - kubeadm
+        - kubectl
+
+    - name: Add vagrant user to docker group
+      user:
+        name: vagrant
+        group: docker
+    
+    - name: Remove swapfile from /etc/fstab
+      mount:
+        name: "{{ item }}"
+        fstype: swap
+        state: absent
+      with_items:
+        - swap
+        - none
+
+    - name: Disable swap
+      command: swapoff -a
+      when: ansible_swaptotal_mb > 0
+
+    - name: Change Docker's cgroup Driver
+      lineinfile:
+        path: /usr/lib/systemd/system/docker.service
+        search_string: "ExecStart=/usr/bin/dockerd -H fd:// --containerd=/run/containerd/containerd.sock"
+        line: "ExecStart=/usr/bin/dockerd -H fd:// --containerd=/run/containerd/containerd.sock --exec-opt native.cgroupdriver=systemd"
+
+    - name: Enable service docker, and enable persistently
+      service: 
+        name: docker
+        enabled: yes
+        daemon_reload: yes
+
+    - name: Restart Docker
+      systemd:
+        state: restarted
+        daemon_reload: yes
+        name: docker
+
+    - name: Enable service kubelet, and enable persistently
+      service: 
+        name: kubelet
+        enabled: yes
+      
+    - name: Configure node ip
+      lineinfile:
+        path: /etc/default/kubelet
+        line: KUBELET_EXTRA_ARGS=--node-ip={{ ansible_default_ipv4.address }}
+        create: yes
+
+    - name: Restart kubelet
+      service:
+        name: kubelet
+        daemon_reload: yes
+        state: restarted
