@@ -43,5 +43,5 @@ spec:
         - name: MYSQL_PORT_3306_TCP_ADDR
           value: mysql
         - name: MYSQL_PORT_3306_TCP_PORT
-          value: 3306
+          value: '3306'
 

@@ -9,20 +9,20 @@
         name: sshd
         state: restarted
 
-    - name: Create User sefa
+    - name: Create User <username>
       user:
-        name: sefa
+        name: <username>
         state: present
-        password: "{{ 'Aa34Bb35' | password_hash('sha512') }}"
+        password: "{{ '<pass>' | password_hash('sha512') }}"
         update_password: on_create
         shell: /bin/bash
 
-    - name: Add Sudo Rights For User Sefa
+    - name: Add Sudo Rights For User <username>
       copy:
-        dest: /etc/sudoers.d/sefa
-        content: "sefa ALL=(root) NOPASSWD: ALL"
+        dest: /etc/sudoers.d/<username>
+        content: "<username> ALL=(root) NOPASSWD: ALL"
         backup: true
-      
+
     - name: Add Sudo Rights For User Vagrant
       copy:
         dest: /etc/sudoers.d/vagrant
@@ -88,7 +88,7 @@
       user:
         name: vagrant
         group: docker
-    
+
     - name: Remove swapfile from /etc/fstab
       mount:
         name: "{{ item }}"
@@ -109,7 +109,7 @@
         line: "ExecStart=/usr/bin/dockerd -H fd:// --containerd=/run/containerd/containerd.sock --exec-opt native.cgroupdriver=systemd"
 
     - name: Enable service docker, and enable persistently
-      service: 
+      service:
         name: docker
         enabled: yes
         daemon_reload: yes
@@ -121,10 +121,10 @@
         name: docker
 
     - name: Enable service kubelet, and enable persistently
-      service: 
+      service:
         name: kubelet
         enabled: yes
-      
+
     - name: Configure node ip
       lineinfile:
         path: /etc/default/kubelet

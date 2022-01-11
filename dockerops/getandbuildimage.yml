@@ -4,8 +4,8 @@
     become: true
     handlers:
     vars:
-      - githubuser: sefacanacar@gmail.com
-      - githubpass: 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
+      - githubuser: <username>
+      - githubpass: <token>
     tasks:
     - name: Clone the Project
       git:
@@ -13,7 +13,7 @@
         dest: /root/basic-python-app-for-docker
         single_branch: yes
         version: master
-    
+
     - name: "Build Python App Image"
       shell: "docker image build -t python-app /root/basic-python-app-for-docker/"
       register: scOut6
